@@ -87,7 +87,7 @@ using the machine's UTC date, so a local date that is still tomorrow in UTC is r
 
 `--format csv|json|html` (default `csv`), `--output FILE`, `--force`, `--brand NAME`.
 
-- **CSV** has one flat row per record with a trailing `complete` column (`true` or `false`), every field quoted, `\n` line endings, and the same fields as JSON including `schema_version`, rules date and sources. Lists are joined with ` | `. Values that
+- **CSV** has one flat row per record with a `complete` column (`true` or `false`), every field quoted, `\n` line endings, and the same fields as JSON including `schema_version`, rules date and sources. Lists are joined with ` | `. Values that
   start with `=`, `+`, `-`, `@`, tab or carriage return get a leading apostrophe.
 - **JSON** is an object with `tool`, `tool_version`, `schema_version`, `rules_as_of`, `generated_at`,
   `complete`, `rules` (each with statement, source URL and review date) and `results`.
@@ -108,7 +108,7 @@ input file, even with `--force`, and its directory must already exist. With no
 | `0` | Completed. Findings do not change this unless `--fail-on-finding` is set. |
 | `1` | `--fail-on-finding` was set and at least one `potentially_affected` result exists. |
 | `2` | Argument, input or output error. Takes precedence over `1`. |
-| `130` | Interrupted. Records already loaded are written marked incomplete (`complete: false` in JSON, `complete` column in CSV, a callout in HTML) and the exit code is 130. An interrupt during rendering or the final write triggers one further attempt to write the same results with `complete: false`; a second interrupt can still leave no report. |
+| `130` | Interrupted. Completed observations are preserved where possible; the publication rules below distinguish pre-publication recovery, interrupted stdout and an already-published report. |
 
 ## Result fields
 
@@ -149,3 +149,9 @@ git diff --check
 
 Tests use synthetic input and a temporary directory only; they make no network
 requests. GitHub Actions runs them on Linux and Windows with Python 3.10 and 3.14.
+
+## Report publication and interruption
+
+Reports are fully rendered and UTF-8 checked before output starts. An interruption before publication can trigger one incomplete-report attempt; a second interruption can prevent recovery. After stdout starts, no second report is appended and the stream may be truncated. After atomic file publication succeeds, the completed bytes and their original completeness flag are preserved, including when interruption arrives before Python records success. Destination identity is reconciled against the staged inode; an unrelated competing file is not treated as our report. A retry barrier is set inside the guarded try before mutation. If destination metadata cannot be read or a second interruption occurs during reconciliation, the outcome remains unknown and the barrier prevents retry without claiming success. Proven absence or a different inode clears the barrier; matching the staged inode proves publication. The original no-clobber/`--force` choice remains in effect.
+
+CSV retains its existing column order and appends `record_type`: `result` for asset observations, `summary` for a zero-result report. A summary preserves the completeness flag, schema/rule metadata and `not_tested` without inventing an asset finding; consumers must distinguish it from an asset row. NUL-containing CSV input/output is an operational error (exit 2) before stdout, new-file publication or forced replacement. Existing stricter control-character input policies remain in effect. Formula prefixes are neutralized after mixed leading whitespace, including Unicode whitespace.

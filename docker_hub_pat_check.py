@@ -350,6 +350,8 @@ def _check_quotes(text: str) -> None:
 
 def load_csv(path: Path, today=None, budget=MAX_RECORDS) -> list[Result]:
     text = _read_bounded(path, "CSV file")
+    if "\x00" in text:
+        raise InputError("CSV input cannot contain NUL characters")
     _check_quotes(text)
     try:
         reader = csv.DictReader(io.StringIO(text, newline=""), strict=True)
@@ -376,6 +378,8 @@ def load_csv(path: Path, today=None, budget=MAX_RECORDS) -> list[Result]:
 def csv_safe(value):
     if isinstance(value, list):
         value = " | ".join(value)
+    if isinstance(value, str) and "\x00" in value:
+        raise ValueError("CSV values cannot contain NUL characters")
     if isinstance(value, str) and value.lstrip().startswith(("=", "+", "-", "@", "\t", "\r")):
         return "'" + value
     return value
@@ -466,10 +470,14 @@ Reported remediation is not a guarantee.</p>
 
 def write_report(output, rows, *, format="csv", brand="CompleteTech LLC", complete=True):
     if format == "csv":
-        writer = csv.DictWriter(output, fieldnames=[*Result.__dataclass_fields__, "complete"], lineterminator="\n", quoting=csv.QUOTE_ALL)
+        writer = csv.DictWriter(output, fieldnames=[*Result.__dataclass_fields__, "complete", "record_type"], lineterminator="\n", quoting=csv.QUOTE_ALL)
         writer.writeheader()
         for row in rows:
-            writer.writerow({**{k: csv_safe(v) for k, v in row.items()}, "complete": "true" if complete else "false"})
+            writer.writerow({**{k: csv_safe(v) for k, v in row.items()}, "record_type": "result", "complete": "true" if complete else "false"})
+        if not rows:
+            writer.writerow({"record_type": "summary", "complete": "true" if complete else "false",
+                             "schema_version": SCHEMA_VERSION, "docker_hub_pat_cves": csv_safe(list(CVES)),
+                             "docker_hub_pat_rules_as_of": RULES_DATE, "docker_hub_pat_exploitability": "not_tested"})
     elif format == "json":
         json.dump({"tool": "docker-hub-pat-check", "tool_version": TOOL_VERSION, "schema_version": SCHEMA_VERSION, "rules_as_of": RULES_DATE,
                    "generated_at": datetime.now(timezone.utc).isoformat(), "complete": complete,
@@ -479,25 +487,53 @@ def write_report(output, rows, *, format="csv", brand="CompleteTech LLC", comple
         output.write(render_html(rows, brand=brand, complete=complete))
 
 
-def save_report(path, rows, *, force=False, **options):
-    """Publish a complete file atomically, refusing an existing path by default."""
+def save_report(path, rows, *, force=False, state=None, **options):
+    """Render before writing and reconcile an interrupted atomic publication by inode."""
+    state = {} if state is None else state
+    buffer = io.StringIO(newline="")
+    write_report(buffer, rows, **options)
+    text = buffer.getvalue()
+    text.encode("utf-8")
     if path is None:
-        buffer = io.StringIO()
-        write_report(buffer, rows, **options)
-        sys.stdout.write(buffer.getvalue())
+        state["stdout_started"] = True
+        sys.stdout.write(text)
+        state["published"] = True
         return
     path = Path(path)
     temporary = None
     try:
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", newline="", dir=path.parent, prefix=".docker-hub-pat-", delete=False) as stream:
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", newline="", dir=path.parent,
+                                         prefix=".docker-hub-pat-", delete=False) as stream:
             temporary = Path(stream.name)
-            write_report(stream, rows, **options)
+            stream.write(text)
             stream.flush()
             os.fsync(stream.fileno())
-        if force:
-            os.replace(temporary, path)
-        else:
-            os.link(temporary, path)  # Atomic no-clobber publication.
+            staged_identity = os.fstat(stream.fileno())
+        try:
+            state["publication_started"] = True
+            if force:
+                os.replace(temporary, path)
+            else:
+                try:
+                    os.link(temporary, path)
+                except FileExistsError:
+                    raise ValueError("Output exists; use a new path or explicitly pass --force") from None
+                except OSError:
+                    raise ValueError("Cannot publish without overwrite: hard links are unavailable here") from None
+            state["published"] = True
+        except KeyboardInterrupt:
+            try:
+                destination = os.stat(path, follow_symlinks=False)
+            except FileNotFoundError:
+                state["publication_started"] = False
+            except OSError:
+                pass  # Indeterminate: retain the pre-mutation retry barrier.
+            else:
+                if os.path.samestat(staged_identity, destination):
+                    state["published"] = True
+                else:
+                    state["publication_started"] = False
+            raise
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
@@ -570,14 +606,26 @@ def main(argv=None) -> int:
         print("error: an input or output file could not be read or checked", file=sys.stderr)
         return 2
     results = [asdict(r) for r in rows]
+    state = {"published": False, "stdout_started": False, "publication_started": False}
     try:
         try:
-            save_report(args.output, results, force=args.force, format=args.format, brand=args.brand, complete=complete)
+            save_report(args.output, results, force=args.force, format=args.format, brand=args.brand, complete=complete, state=state)
         except KeyboardInterrupt:
+            if state["published"]:
+                print("Interrupted after the report was published; not retrying.", file=sys.stderr)
+                return 130
+            if state.get("publication_started"):
+                print("Interrupted; publication could not be verified and will not be retried.", file=sys.stderr)
+                return 130
+            if state["stdout_started"]:
+                print("Interrupted while writing stdout; output may be truncated and no second report is written.", file=sys.stderr)
+                return 130
             complete = False
             print("Interrupted; writing completed results.", file=sys.stderr)
-            save_report(args.output, results, force=args.force, format=args.format, brand=args.brand, complete=False)
-    except (OSError, ValueError, RuntimeError):
+            save_report(args.output, results, force=args.force, format=args.format, brand=args.brand, complete=False, state=state)
+    except KeyboardInterrupt:
+        return 130
+    except (OSError, ValueError, RuntimeError, csv.Error):
         print("Cannot write report: the output file could not be written", file=sys.stderr)
         return 2
     if not complete:
