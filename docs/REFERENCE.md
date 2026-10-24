@@ -52,7 +52,7 @@ Unsupported fields, duplicate JSON keys, non-finite numbers, wrong types,
 control characters, wrong column counts and invalid JSON or CSV are **operational
 errors** (exit 2). A value that resembles a Docker token (`dckr_` plus three
 letters and an underscore) is also an error, and the value is not echoed.
-Unrecognized enum values and invalid dates in an otherwise valid record are
+The output path and `--brand` are validated before any input is read. Error messages never echo supplied text (field names, column names, paths, argument values); they describe the problem by position or count. Unrecognized enum values and invalid dates in an otherwise valid record are
 assessment results: `unknown` with `malformed_evidence`.
 
 ## Assessment
@@ -76,6 +76,7 @@ assessment results: `unknown` with `malformed_evidence`.
 | `evidence_incomplete` | `unknown` | Other evidence without a notification status. |
 | `evidence_absent` | `unknown` | No evidence. Absence is never clean. |
 | `malformed_evidence` | `unknown` | Unrecognized value or invalid date. |
+| `conflicting_evidence` (deactivation date) | `unknown` | `vendor_deactivated` with a remediation date before 2026-10-08, the date Docker reports. |
 | `date_outside_vendor_timeline` | `unknown` | Notification date before 2026-10-02, remediation date before 2026-09-30, or either date in the future. |
 
 `exploitability` is always `not_tested`. `version_status` does not exist because
@@ -86,9 +87,9 @@ using the machine's UTC date; rerunning an old copy does not update its rules.
 
 `--format csv|json|html` (default `csv`), `--output FILE`, `--force`, `--brand NAME`.
 
-- **CSV** has one flat row per record. Lists are joined with ` | `. Values that
+- **CSV** has one flat row per record, every field quoted, `\n` line endings, and the same fields as JSON including `schema_version`, rules date and sources. Lists are joined with ` | `. Values that
   start with `=`, `+`, `-`, `@`, tab or carriage return get a leading apostrophe.
-- **JSON** is an object with `tool`, `tool_version`, `rules_as_of`, `generated_at`,
+- **JSON** is an object with `tool`, `tool_version`, `schema_version`, `rules_as_of`, `generated_at`,
   `complete`, `rules` (each with statement, source URL and review date) and `results`.
 - **HTML** is one self-contained, script-free page with a restrictive
   Content-Security-Policy, escaped values, light/dark themes and print styles.
@@ -107,11 +108,11 @@ input file, even with `--force`, and its directory must already exist. With no
 | `0` | Completed. Findings do not change this unless `--fail-on-finding` is set. |
 | `1` | `--fail-on-finding` was set and at least one `potentially_affected` result exists. |
 | `2` | Argument, input or output error. Takes precedence over `1`. |
-| `130` | Interrupted. |
+| `130` | Interrupted while loading inputs. Records already loaded are written with `complete: false` (JSON) and the exit code is 130. An interrupt during the final write is not guaranteed to leave a report. |
 
 ## Result fields
 
-`label`, `source` (`cli`, `inventory`, `csv`), the seven input fields echoed as
+`schema_version` (`1`), `label`, `source` (`cli`, `inventory`, `csv`), the seven input fields echoed as
 supplied after trimming, `docker_hub_pat_status`, `docker_hub_pat_evidence_status`,
 `docker_hub_pat_exploitability`, `docker_hub_pat_cves`, `docker_hub_pat_rules_as_of`,
 `docker_hub_pat_sources`, `docker_hub_pat_notes`, `docker_hub_pat_recommendation`

@@ -78,6 +78,10 @@ The vendor post is the only source. The notification and deactivation details ar
 - It is not a generic scanner and does not infer exposure from versions, banners or account metadata.
 - It does not store, log or upload anything. Reports contain only what you supplied. Keep real evidence and reports out of version control; the `reports/`, `private/` and `inventories/` paths are already ignored.
 
+## Primary sources
+
+1. [Docker Hub security advisory: personal access tokens transferred during account-to-organization conversions](https://www.docker.com/blog/docker-hub-security-advisory-cve-2026-105445/), reviewed 2026-10-24.
+
 ## One exploit, one repository
 
 | Field | Scope |

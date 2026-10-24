@@ -42,7 +42,8 @@ collection to the specific product and advisory.
 ### Outstanding caveats
 
 - No meaningful client or Docker version rule exists. Use administrator-supplied vendor notification and remediation evidence; do not infer exposure by probing Hub or testing tokens.
-- Vendor sent impacted-user/owner notifications on October 2 and says unnotified accounts were not exposed. This is a separate distinct exploit even though report discourages a standalone scanner.
+- Vendor sent impacted-user and organization-owner notifications on October 2, 2026 and says accounts that received no email were not exposed. This is the vendor's claim, not verified here.
+- Vendor deactivated identified transferred PATs on October 8, 2026, except tokens whose owners asked to keep them.
 
 ## Vendor evidence gate
 
@@ -79,7 +80,7 @@ collection to the specific product and advisory.
 - [x] Add a self-contained, script-free HTML report with escaped values and synthetic examples when useful.
 - [x] Protect CSV consumers from formula injection and keep private paths/data out of shared examples.
 - [x] Provide actual CLI help, input examples, exit-status semantics, and output-overwrite behavior.
-- [x] Findings (exit 1) are distinct from operational errors (exit 2); an interrupt exits 130. Runs are instantaneous, so no partial-result checkpointing is needed.
+- [x] Findings (exit 1) are distinct from operational errors (exit 2). An interrupt while inputs load writes the already-loaded records with `complete: false` and exits 130 (tested with an injected `KeyboardInterrupt`). An interrupt during the final write is not guaranteed to leave a report; the write itself is atomic.
 - [x] `--brand` names the organization in the HTML report. No logo option is provided.
 
 ## 5. Gate any optional network mode

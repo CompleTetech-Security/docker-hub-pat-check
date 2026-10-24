@@ -88,11 +88,21 @@ class AssessmentTests(unittest.TestCase):
         ]
         for key, value, expected in cases:
             with self.subTest(key=key, value=value):
-                outcome = assess(**{**FULL, key: value})
+                outcome = assess(**{**FULL, "remediation": "operator_revoked_or_rotated", key: value})
                 if expected:
                     self.assertEqual(("unknown", expected), (outcome["status"], outcome["evidence_status"]))
                 else:
                     self.assertEqual("fixed_version_reported", outcome["status"])
+
+    def test_vendor_deactivation_before_the_vendor_date_is_conflicting(self):
+        for day, status in (("2026-10-07", "unknown"), ("2026-10-08", "fixed_version_reported"), ("2026-10-09", "fixed_version_reported")):
+            with self.subTest(day=day):
+                outcome = assess(**{**FULL, "remediation_date": day})
+                self.assertEqual(status, outcome["status"])
+                if status == "unknown":
+                    self.assertEqual("conflicting_evidence", outcome["evidence_status"])
+        early = assess(**{**FULL, "remediation": "operator_revoked_or_rotated", "remediation_date": "2026-10-03"})
+        self.assertEqual("fixed_version_reported", early["status"])
 
     def test_malformed_values_are_unknown(self):
         bad = [
@@ -177,6 +187,86 @@ class InputTests(unittest.TestCase):
                 code, out, err = self.run_main("--inventory", self.write(name + ".json", text))
                 self.assertEqual(2, code)
                 self.assertNotIn("dckr_pat_xxx", err)
+
+    def test_untrusted_text_is_never_echoed_or_rendered(self):
+        marker = "dckr_pat_SYNTHETICMARKER"
+        weird = "ZZ_UNIQUE_MARKER_ZZ"
+        bad_json = self.write("k.json", json.dumps({"schema_version": 1, weird: 1, marker: 2}))
+        bad_csv = self.write("k.csv", f"label,{weird},{marker}\r\na,b,c\r\n")
+        runs = [
+            ("--inventory", bad_json), ("--evidence-csv", bad_csv),
+            ("--inventory", self.root / marker / weird), ("--evidence-csv", self.root / weird),
+            ("--format", weird), (weird,), ("--label", marker), ("--notification", "received", "--brand", marker),
+            ("--notification", "received", "--output", self.root / weird / marker),
+        ]
+        for argv in runs:
+            with self.subTest(argv=[str(a)[-30:] for a in argv]):
+                code, out, err = self.run_main(*argv)
+                self.assertEqual(2, code)
+                for text in (out, err):
+                    self.assertNotIn(marker, text)
+                    self.assertNotIn(weird, text)
+
+    def test_token_like_brand_is_rejected_before_any_output(self):
+        target = self.root / "r.html"
+        code, out, err = self.run_main("--notification", "received", "--format", "html", "--brand", "DCKR_OAT_abc", "--output", target)
+        self.assertEqual(2, code)
+        self.assertFalse(target.exists())
+
+    def test_huge_integers_and_deep_nesting_are_operational_errors(self):
+        cases = {"bigint": '{"schema_version": ' + "9" * 5000 + "}", "deep": "[" * 100000 + "]" * 100000}
+        for name, text in cases.items():
+            with self.subTest(name=name):
+                self.assertEqual(2, self.run_main("--inventory", self.write(name + ".json", text))[0])
+
+    def test_csv_oversize_field_and_unterminated_quote_are_errors(self):
+        self.assertEqual(2, self.run_main("--evidence-csv", self.write("q.csv", 'label\r\n"abc\r\n'))[0])
+        self.assertEqual(2, self.run_main("--evidence-csv", self.write("big.csv", "label\r\n" + "a" * 200000 + "\r\n"))[0])
+
+    def test_aggregate_record_limit_counts_across_files(self):
+        half = self.write("h.json", json.dumps([{"schema_version": 1}] * (tool.MAX_RECORDS // 2 + 1)))
+        self.assertEqual(0, self.run_main("--inventory", half)[0])
+        self.assertEqual(2, self.run_main("--inventory", half, "--inventory", half)[0])
+        self.assertEqual(2, self.run_main("--inventory", half, "--evidence-csv", self.write("h.csv", "label\r\n" + "a\r\n" * (tool.MAX_RECORDS // 2 + 1)))[0])
+
+    def test_csv_output_is_fully_quoted_with_schema_and_rules(self):
+        code, out, _ = self.run_main("--notification", "received")
+        self.assertEqual(0, code)
+        row = next(csv.DictReader(io.StringIO(out)))
+        self.assertEqual("1", row["schema_version"])
+        self.assertEqual(tool.RULES_DATE, row["docker_hub_pat_rules_as_of"])
+        self.assertIn(tool.SOURCE, row["docker_hub_pat_sources"])
+        self.assertTrue(out.splitlines()[0].startswith('"schema_version"'))
+
+    def test_output_path_is_validated_before_inputs_are_read(self):
+        target = self.root / "exists.json"
+        target.write_text("keep", encoding="utf-8")
+        calls = []
+        original = tool.load_inventory
+        tool.load_inventory = lambda *a, **k: calls.append(1) or original(*a, **k)
+        try:
+            code, _, _ = self.run_main("--inventory", self.write("i.json", '{"schema_version": 1}'), "--output", target)
+        finally:
+            tool.load_inventory = original
+        self.assertEqual(2, code)
+        self.assertEqual([], calls)
+
+    def test_interruption_writes_completed_results_as_incomplete(self):
+        good = self.write("g.json", '{"schema_version": 1, "notification": "received"}')
+        original = tool.load_csv
+
+        def interrupt(*args, **kwargs):
+            raise KeyboardInterrupt
+
+        tool.load_csv = interrupt
+        try:
+            code, out, _ = self.run_main("--inventory", good, "--evidence-csv", self.write("c.csv", "label\r\na\r\n"), "--format", "json")
+        finally:
+            tool.load_csv = original
+        self.assertEqual(130, code)
+        data = json.loads(out)
+        self.assertFalse(data["complete"])
+        self.assertEqual(1, len(data["results"]))
 
     def test_inventory_size_and_count_bounds(self):
         big = self.write("big.json", " " * (tool.MAX_INPUT + 1))

@@ -23,6 +23,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 TOOL_VERSION = "1.0.0"
+SCHEMA_VERSION = 1
 MAX_INPUT = 4 * 1024 * 1024
 MAX_RECORDS = 10000
 MAX_FIELD = 512
@@ -38,6 +39,7 @@ EXPOSURE_START = "2024-08-26T20:33:00Z"
 VENDOR_FIX_AT = "2026-09-30T19:10:00Z"
 FIX_DAY = date(2026, 9, 30)
 NOTIFICATION_DAY = date(2026, 10, 2)
+DEACTIVATION_DAY = date(2026, 10, 8)
 
 RULES = (
     {"id": "exposure-window", "statement": f"Vendor-reported exposure window: {EXPOSURE_START} to about {VENDOR_FIX_AT}.",
@@ -80,6 +82,7 @@ def _field_name(name):
 
 @dataclass
 class Result:
+    schema_version: int = SCHEMA_VERSION
     label: str = "unlabeled"
     source: str = "cli"
     notification: str = ""
@@ -173,6 +176,11 @@ def assess_pat_evidence(
             )
             return result
 
+    if r == "vendor_deactivated" and r_day is not None and r_day < DEACTIVATION_DAY:
+        result["evidence_status"] = "conflicting_evidence"
+        notes.append("Vendor deactivation is reported by Docker as 2026-10-08; an earlier remediation date conflicts with it. The evidence is not accepted.")
+        return result
+
     supplied = any((n_day, r_day, r, kept, src)) or n_day is not None
     if n in ("", "unknown"):
         if supplied:
@@ -234,7 +242,7 @@ def _reject_text(value, where):
 def make_result(record: dict, source: str, where: str, today=None) -> Result:
     unknown = sorted(set(record) - set(INPUT_FIELDS) - {"schema_version"})
     if unknown:
-        raise InputError(f"{where}: unsupported field(s): {', '.join(k[:64] for k in unknown)}")
+        raise InputError(f"{where}: {len(unknown)} unsupported field(s)")
     values = {}
     for key in INPUT_FIELDS:
         value = record.get(key)
@@ -279,15 +287,17 @@ def _reject_constant(name):
     raise InputError("non-finite JSON number")
 
 
-def load_inventory(path: Path, today=None) -> list[Result]:
+def load_inventory(path: Path, today=None, budget=MAX_RECORDS) -> list[Result]:
     text = _read_bounded(path, "Inventory file")
     try:
         data = json.loads(text, object_pairs_hook=_no_duplicates, parse_constant=_reject_constant)
     except (json.JSONDecodeError, RecursionError) as exc:
         raise InputError("Inventory is not valid JSON") from exc
+    except ValueError as exc:
+        raise InputError("Inventory contains an unsupported value") from exc
     records = data if isinstance(data, list) else [data]
-    if not 1 <= len(records) <= MAX_RECORDS:
-        raise InputError(f"Inventory must contain 1 to {MAX_RECORDS} records")
+    if not 1 <= len(records) <= budget:
+        raise InputError(f"Inventory must contain 1 to {budget} records (run limit {MAX_RECORDS})")
     results = []
     for index, record in enumerate(records, 1):
         where = f"inventory record {index}"
@@ -300,7 +310,7 @@ def load_inventory(path: Path, today=None) -> list[Result]:
     return results
 
 
-def load_csv(path: Path, today=None) -> list[Result]:
+def load_csv(path: Path, today=None, budget=MAX_RECORDS) -> list[Result]:
     text = _read_bounded(path, "CSV file")
     try:
         reader = csv.DictReader(io.StringIO(text, newline=""), strict=True)
@@ -309,11 +319,11 @@ def load_csv(path: Path, today=None) -> list[Result]:
             raise InputError("CSV needs a header row with unique column names")
         extra = sorted(set(header) - set(INPUT_FIELDS))
         if extra:
-            raise InputError("CSV has unsupported column(s): " + ", ".join(c[:64] for c in extra))
+            raise InputError(f"CSV has {len(extra)} unsupported column(s)")
         results = []
         for index, row in enumerate(reader, 1):
-            if index > MAX_RECORDS:
-                raise InputError(f"CSV is limited to {MAX_RECORDS} rows")
+            if index > budget:
+                raise InputError(f"CSV exceeds the remaining run limit of {budget} records (run limit {MAX_RECORDS})")
             if None in row or None in row.values():
                 raise InputError(f"CSV row {index}: wrong number of columns")
             results.append(make_result(row, "csv", f"CSV row {index}", today))
@@ -415,12 +425,12 @@ Reported remediation is not a guarantee.</p>
 
 def write_report(output, rows, *, format="csv", brand="CompleteTech LLC", complete=True):
     if format == "csv":
-        writer = csv.DictWriter(output, fieldnames=list(Result.__dataclass_fields__))
+        writer = csv.DictWriter(output, fieldnames=list(Result.__dataclass_fields__), lineterminator="\n", quoting=csv.QUOTE_ALL)
         writer.writeheader()
         for row in rows:
             writer.writerow({k: csv_safe(v) for k, v in row.items()})
     elif format == "json":
-        json.dump({"tool": "docker-hub-pat-check", "tool_version": TOOL_VERSION, "rules_as_of": RULES_DATE,
+        json.dump({"tool": "docker-hub-pat-check", "tool_version": TOOL_VERSION, "schema_version": SCHEMA_VERSION, "rules_as_of": RULES_DATE,
                    "generated_at": datetime.now(timezone.utc).isoformat(), "complete": complete,
                    "rules": list(RULES), "results": rows}, output, ensure_ascii=False, indent=2)
         output.write("\n")
@@ -450,8 +460,17 @@ def save_report(path, rows, *, force=False, **options):
             temporary.unlink(missing_ok=True)
 
 
+class QuietParser(argparse.ArgumentParser):
+    """Argument parser that never echoes untrusted argument text in errors."""
+
+    def error(self, message):
+        self.print_usage(sys.stderr)
+        print("error: invalid command-line arguments (details withheld so supplied values are not echoed)", file=sys.stderr)
+        raise SystemExit(2)
+
+
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(
+    parser = QuietParser(
         description=__doc__,
         epilog="Exit codes: 0 completed; 1 --fail-on-finding and a potentially_affected result; 2 input/output error; 130 interrupted.",
     )
@@ -475,17 +494,10 @@ def main(argv=None) -> int:
            "remediation": args.remediation, "remediation_date": args.remediation_date,
            "retained_listed_tokens": args.retained_listed_tokens, "evidence_source": args.evidence_source}
     rows = []
+    complete = True
     try:
-        if any(v is not None for v in cli.values()):
-            rows.append(make_result(cli, "cli", "command line"))
-        for path in args.inventory:
-            rows.extend(load_inventory(path))
-        for path in args.evidence_csv:
-            rows.extend(load_csv(path))
-        if not rows:
-            parser.error("provide --notification (or other evidence options), --inventory, or --evidence-csv")
-        if len(rows) > MAX_RECORDS:
-            raise InputError(f"A run is limited to {MAX_RECORDS} records")
+        _reject_text(args.brand, "--brand")
+        # Validate the output path before loading any input.
         if args.output:
             inputs = [*args.inventory, *args.evidence_csv]
             if any(args.output.resolve() == p.resolve() for p in inputs):
@@ -494,15 +506,34 @@ def main(argv=None) -> int:
                 raise InputError("Output exists; use a new path or explicitly pass --force")
             if not args.output.parent.is_dir():
                 raise InputError("Output directory must already exist")
-    except (OSError, ValueError, UnicodeError) as exc:
+        if not any(v is not None for v in cli.values()) and not args.inventory and not args.evidence_csv:
+            parser.print_usage(sys.stderr)
+            print("error: provide --notification (or other evidence options), --inventory, or --evidence-csv", file=sys.stderr)
+            return 2
+        try:
+            if any(v is not None for v in cli.values()):
+                rows.append(make_result(cli, "cli", "command line"))
+            for path in args.inventory:
+                rows.extend(load_inventory(path, budget=MAX_RECORDS - len(rows)))
+            for path in args.evidence_csv:
+                rows.extend(load_csv(path, budget=MAX_RECORDS - len(rows)))
+        except KeyboardInterrupt:
+            complete = False
+            print("Interrupted; writing completed results.", file=sys.stderr)
+    except InputError as exc:
         print(f"error: {exc}", file=sys.stderr)
+        return 2
+    except (OSError, UnicodeError, ValueError):
+        print("error: an input or output file could not be read or checked", file=sys.stderr)
         return 2
     results = [asdict(r) for r in rows]
     try:
-        save_report(args.output, results, force=args.force, format=args.format, brand=args.brand)
-    except (OSError, ValueError) as exc:
-        print(f"Cannot write report: {exc}", file=sys.stderr)
+        save_report(args.output, results, force=args.force, format=args.format, brand=args.brand, complete=complete)
+    except (OSError, ValueError):
+        print("Cannot write report: the output file could not be written", file=sys.stderr)
         return 2
+    if not complete:
+        return 130
     if args.fail_on_finding and any(r["docker_hub_pat_status"] == "potentially_affected" for r in results):
         return 1
     return 0
