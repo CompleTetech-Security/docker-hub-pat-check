@@ -1,0 +1,38 @@
+{
+  "slug": "docker-hub-pat-check",
+  "id": "CVE-2026-105445",
+  "aliases": [],
+  "title": "Docker Hub account-conversion PAT reassignment",
+  "category": "Docker",
+  "affected": {
+    "exposure_start": "2024-08-26T20:33:00Z",
+    "type": "Historical service-side exposure; vendor notification required"
+  },
+  "fixed": {
+    "fixed_at": "2026-09-30T19:10:00Z",
+    "type": "Vendor service remediation; no local version threshold"
+  },
+  "preconditions": [
+    "vendor identified account conversion exposure"
+  ],
+  "notes": [
+    "No meaningful client or Docker version rule exists. Use administrator-supplied vendor notification and remediation evidence; do not infer exposure by probing Hub or testing tokens.",
+    "Vendor sent impacted-user/owner notifications on October 2 and says unnotified accounts were not exposed. This is a separate distinct exploit even though report discourages a standalone scanner."
+  ],
+  "sources": [
+    "https://www.docker.com/blog/docker-hub-security-advisory-cve-2026-105445/"
+  ],
+  "implementation_status": "vendor_evidence_only",
+  "verification": "verified_service_side_historical",
+  "status": "new",
+  "verified_at": "2026-10-23",
+  "repository_url": "https://github.com/CompleteTech-LLC/docker-hub-pat-check",
+  "schema_version": "1.0",
+  "record_type": "research_only",
+  "detection_enabled": false,
+  "implementation_complete": false,
+  "assessment_performed": false,
+  "exploitability": "not_tested",
+  "scope_policy": "One distinct exploit per repository; aliases and affected products share this scope.",
+  "research_notice": "Source research for a planned checker; not an executable rule or assessment result."
+}
