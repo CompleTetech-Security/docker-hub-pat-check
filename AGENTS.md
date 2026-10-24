@@ -8,14 +8,19 @@ before changing this project.
 
 This repository covers only **CVE-2026-105445** (Docker Hub account-conversion PAT reassignment). Its aliases
 refer to the same exploit. Keep unrelated vulnerabilities in separate repositories.
-The repository is an initialized research foundation. No checker, tests, or CI
-workflow exists yet; never imply otherwise or document nonexistent commands.
+The repository contains an offline vendor-evidence recorder (`docker_hub_pat_check.py`)
+with unit tests and a CI workflow. There is no version rule and no network mode;
+never add either, never probe Docker Hub, and never accept or log tokens.
 
 ## Project map
 
-- `advisory.json`: source-preserving research record; detection is disabled.
-- `README.md`: exact scope, advisory snapshot, primary sources, and current status.
-- `docs/IMPLEMENTATION.md`: local implementation and verification checklist.
+- `docker_hub_pat_check.py`: standalone stdlib-only checker (assessment, inputs, CSV/JSON/HTML reports).
+- `test_assessment.py`: boundary and safety tests (`python -m unittest -v`).
+- `examples/`: synthetic evidence files. `docs/example-report.html` and `docs/images/report-*.png` are rendered from them.
+- `.github/workflows/tests.yml`: Linux/Windows, Python 3.10 and 3.14.
+- `advisory.json`: source-reviewed record for the vendor-evidence rule.
+- `README.md`, `docs/REFERENCE.md`: usage, vocabulary, fields, limits, exit codes.
+- `docs/IMPLEMENTATION.md`: implementation and verification checklist.
 - `LICENSING.md`, `CONTRIBUTING.md`, `BRAND_ASSETS.md`: licensing and contribution terms.
 
 ## Implementation constraints
@@ -37,13 +42,12 @@ an honest User-Agent, pacing, bounds, conservative redirects, and no inherited
 environment proxy. Editing this repository does not authorize scanning real targets.
 
 Update sources and verification dates only after primary-source review. Preserve
-all advisory caveats and document unresolved conflicts. Treat research metadata as
-disabled until a real implementation is reviewed and tested.
+all advisory caveats and document unresolved conflicts. A claim of no vendor
+notification is the vendor's claim and stays `unknown`.
 
 ## Validation and delivery
 
-Use focused synthetic cases and local-only fixtures for meaningful behavior tests
-once code exists. Do not invent passing tests, add prose-only tests, or publish
+Use focused synthetic cases and local-only fixtures for behavior tests. Do not invent passing tests, add prose-only tests, or publish
 private assessments. Keep CLI, schemas, methodology, and README aligned. Distinguish
 local results from hosted CI on the exact published commit. Preserve unrelated
 work and follow the licensing and brand policies linked above.

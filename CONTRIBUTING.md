@@ -1,7 +1,7 @@
 # Contributing
 
-This repository is initialized for **CVE-2026-105445**. Checker implementation is
-pending; start with the [implementation checklist](docs/IMPLEMENTATION.md).
+This repository covers **CVE-2026-105445**. Start with the
+[implementation checklist](docs/IMPLEMENTATION.md) and [docs/REFERENCE.md](docs/REFERENCE.md).
 Submit focused pull requests for this exploit. Report flaws requiring private
 disclosure according to [SECURITY.md](SECURITY.md).
 
@@ -15,8 +15,8 @@ before encoding affected or fixed ranges. Preserve evidence provenance and
 Use offline inventories, synthetic examples, mocks, and local fixtures. Do not
 commit credentials, real target lists, private reports, or exploit payloads.
 Network detection must be justified, optional, ordinary, bounded, and authorized.
-Document implemented behavior and actual commands; no checker commands or test
-suite are available in this foundation yet.
+This checker has no network mode and must not gain one. Document implemented
+behavior and actual commands, and run `python -m unittest -v` before submitting.
 
 ## Licensing of contributions
 
