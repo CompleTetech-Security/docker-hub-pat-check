@@ -80,7 +80,7 @@ collection to the specific product and advisory.
 - [x] Add a self-contained, script-free HTML report with escaped values and synthetic examples when useful.
 - [x] Protect CSV consumers from formula injection and keep private paths/data out of shared examples.
 - [x] Provide actual CLI help, input examples, exit-status semantics, and output-overwrite behavior.
-- [x] Findings (exit 1) are distinct from operational errors (exit 2). An interrupt while inputs load writes the already-loaded records with `complete: false` and exits 130 (tested with an injected `KeyboardInterrupt`). An interrupt during rendering or writing triggers one further write attempt with `complete: false` (tested); the write itself is atomic.
+- [x] Preserve completed observations and distinguish interruption from operational errors. `test_review_regressions.py` covers interrupted stdout, pre-publication recovery, post-publication syscall/flag-line interruption, staged-inode identity, CSV failures and zero-result summary metadata; see the reference for exact semantics.
 - [x] `--brand` names the organization in the HTML report. No logo option is provided.
 
 ## 5. Gate any optional network mode
