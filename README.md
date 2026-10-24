@@ -64,12 +64,12 @@ Reviewed against the [vendor advisory](https://www.docker.com/blog/docker-hub-se
 | Item | Vendor-reported value |
 | --- | --- |
 | Exposure start | 2024-08-26 20:33 UTC |
-| Fix deployed | 2026-09-30, about 19:10 UTC (vendor approximation) |
+| Fix deployed | 2026-09-30, about 19:10 UTC (vendor approximation); this is the service fix, not a limit on when an operator may have revoked tokens |
 | Notification emails | 2026-10-02 to users whose accounts received transferred PATs and to their organization owners |
 | Vendor deactivation of transferred PATs | 2026-10-08, except tokens whose owners asked to keep them |
 | Vendor guidance | Review PATs under Account settings, Personal access tokens; revoke any you do not recognize or no longer use; use organization access tokens for organization automation; contact Docker Support |
 
-The vendor post is the only source. The notification and deactivation details are vendor-reported and not independently verified here.
+The vendor post is the primary source. The CVE record and the NVD entry agree on the exposure window (2024-08-26T20:33:00Z up to 2026-09-30T19:10:00Z) and no disagreement was found; the notification and deactivation details come from the vendor post and the researchers' write-up and are not independently verified here.
 
 ## What it does not do
 
@@ -81,6 +81,7 @@ The vendor post is the only source. The notification and deactivation details ar
 ## Primary sources
 
 1. [Docker Hub security advisory: personal access tokens transferred during account-to-organization conversions](https://www.docker.com/blog/docker-hub-security-advisory-cve-2026-105445/), reviewed 2026-10-24.
+2. [CVE record](https://cveawg.mitre.org/api/cve/CVE-2026-105445) and [NVD entry](https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2026-105445), checked 2026-10-24: same window as the vendor post.
 
 ## One exploit, one repository
 

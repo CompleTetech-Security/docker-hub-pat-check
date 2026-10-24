@@ -19,10 +19,13 @@
   ],
   "notes": [
     "No meaningful client or Docker version rule exists. Use administrator-supplied vendor notification and remediation evidence; do not infer exposure by probing Hub or testing tokens.",
-    "Vendor sent impacted-user and organization-owner notifications on October 2, 2026 and says accounts that received no email were not exposed. This is the vendor's claim, not verified here. Vendor deactivated identified transferred PATs on October 8, 2026, except tokens whose owners asked to keep them."
+    "Vendor sent impacted-user and organization-owner notifications on October 2, 2026 and says accounts that received no email were not exposed. This is the vendor's claim, not verified here. Vendor deactivated identified transferred PATs on October 8, 2026, except tokens whose owners asked to keep them.",
+    "Source check 2026-10-24: the CVE record and NVD give 2024-08-26T20:33:00Z up to (lessThan) 2026-09-30T19:10:00Z, matching the vendor post; NVD status is Awaiting Analysis. No disagreement found; the vendor post wins any future conflict."
   ],
   "sources": [
-    "https://www.docker.com/blog/docker-hub-security-advisory-cve-2026-105445/"
+    "https://www.docker.com/blog/docker-hub-security-advisory-cve-2026-105445/",
+    "https://cveawg.mitre.org/api/cve/CVE-2026-105445",
+    "https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2026-105445"
   ],
   "implementation_status": "vendor_evidence_only",
   "verification": "verified_service_side_historical",

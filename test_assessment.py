@@ -96,7 +96,9 @@ class AssessmentTests(unittest.TestCase):
             ("notification_date", "2026-10-02", None),
             ("notification_date", "2026-10-24", None),
             ("notification_date", "2026-10-25", "date_outside_vendor_timeline"),
-            ("remediation_date", "2026-09-29", "date_outside_vendor_timeline"),
+            ("remediation_date", "2024-08-25", "date_outside_vendor_timeline"),
+            ("remediation_date", "2024-08-26", None),
+            ("remediation_date", "2026-09-29", None),
             ("remediation_date", "2026-09-30", None),
             ("remediation_date", "2026-10-25", "date_outside_vendor_timeline"),
         ]
@@ -117,6 +119,15 @@ class AssessmentTests(unittest.TestCase):
                     self.assertEqual("conflicting_evidence", outcome["evidence_status"])
         early = assess(**{**FULL, "remediation": "operator_revoked_or_rotated", "remediation_date": "2026-10-03"})
         self.assertEqual("fixed_version_reported", early["status"])
+
+    def test_vendor_remediation_claim_has_its_own_boundary(self):
+        for day, status in (("2026-09-29", "unknown"), ("2026-09-30", "unknown"), ("2026-10-08", "fixed_version_reported")):
+            with self.subTest(day=day):
+                self.assertEqual(status, assess(**{**FULL, "remediation": "vendor_deactivated", "remediation_date": day})["status"])
+
+    def test_potentially_affected_recommendation_covers_every_listed_token(self):
+        text = assess(notification="received")["recommendation"]
+        self.assertIn("every token", text)
 
     def test_malformed_values_are_unknown(self):
         bad = [
@@ -339,6 +350,23 @@ class InputTests(unittest.TestCase):
         code, out, err = self.run_main("--label", "bad\udcff", "--notification", "received", "--format", "json", "--output", self.root / "u.json")
         self.assertEqual(2, code)
         self.assertEqual([], list(self.root.iterdir()))
+
+    def test_duplicate_key_error_is_reported_accurately(self):
+        code, _, err = self.run_main("--inventory", self.write("d.json", '{"schema_version": 1, "label": "a", "label": "b"}'))
+        self.assertEqual(2, code)
+        self.assertIn("duplicate", err)
+
+    @unittest.skipIf(os.name == "nt", "POSIX permission bits")
+    def test_published_report_is_owner_only(self):
+        target = self.root / "mode.json"
+        self.assertEqual(0, self.run_main("--notification", "received", "--format", "json", "--output", target)[0])
+        self.assertEqual(0o600, target.stat().st_mode & 0o777)
+
+    def test_html_report_includes_evidence_source(self):
+        code, out, _ = self.run_main("--notification", "received", "--evidence-source", "vendor_support", "--format", "html")
+        self.assertEqual(0, code)
+        self.assertIn("<th>Evidence source</th>", out)
+        self.assertIn("vendor_support", out)
 
     def test_inventory_size_and_count_bounds(self):
         big = self.write("big.json", " " * (tool.MAX_INPUT + 1))

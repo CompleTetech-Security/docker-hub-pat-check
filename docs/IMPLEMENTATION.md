@@ -69,7 +69,7 @@ collection to the specific product and advisory.
 - [x] Emit `exploitability: not_tested` for every future finding.
 - [x] Use `potentially_affected` only when evidence matches this advisory's documented range or condition.
 - [x] Use `fixed_version_reported` only for complete reported remediation evidence (no version comparison exists), without claiming verified remediation.
-- [x] Keep missing, malformed, conflicting, out-of-timeline and contradictory evidence `unknown`. Prerelease, custom-build, backport and uncovered-version cases are n/a: no version is compared.
+- [x] Keep missing, malformed, conflicting, out-of-timeline and contradictory evidence `unknown`. Date bounds are source-backed: notification not before 2026-10-02, vendor deactivation not before 2026-10-08, operator remediation not before the exposure start; the 2026-09-30 service fix is not an operator bound. Prerelease, custom-build, backport and uncovered-version cases are n/a: no version is compared.
 - [x] No `unsupported_runtime` status: there is no runtime lifecycle.
 - [x] Never convert absent source matches, hidden versions, authentication walls, or blocked requests into a clean result.
 - [x] Recommend only the vendor's own guidance; no version threshold exists.

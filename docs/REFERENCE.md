@@ -77,11 +77,11 @@ assessment results: `unknown` with `malformed_evidence`.
 | `evidence_absent` | `unknown` | No evidence. Absence is never clean. |
 | `malformed_evidence` | `unknown` | Unrecognized value or invalid date. |
 | `conflicting_evidence` (deactivation date) | `unknown` | `vendor_deactivated` with a remediation date before 2026-10-08, the date Docker reports. |
-| `date_outside_vendor_timeline` | `unknown` | Notification date before 2026-10-02, remediation date before 2026-09-30, or either date in the future. |
+| `date_outside_vendor_timeline` | `unknown` | Notification date before 2026-10-02, remediation date before the exposure start (2024-08-26), or either date in the future. |
 
 `exploitability` is always `not_tested`. `version_status` does not exist because
 there is no version rule. The tool compares dates against the vendor timeline
-using the machine's UTC date, so a local date that is still tomorrow in UTC is rejected as in the future. A remediation date before 2026-09-30, the vendor's fix day, is treated as outside the vendor timeline and is `unknown`, even for operator-run revocation. Rerunning an old copy does not update its rules.
+using the machine's UTC date, so a local date that is still tomorrow in UTC is rejected as in the future. The date bounds are source-backed and separate. An operator's own revocation or rotation may be dated any day from the exposure start (2024-08-26) to today, because 2026-09-30 is Docker's service-fix date and not an earliest date for an operator's action. The notification date must not precede Docker's 2026-10-02 emails. A `vendor_deactivated` claim must not be dated before Docker's 2026-10-08 deactivation, otherwise it is `conflicting_evidence`. Rerunning an old copy does not update its rules.
 
 ## Outputs
 
@@ -91,7 +91,7 @@ using the machine's UTC date, so a local date that is still tomorrow in UTC is r
   start with `=`, `+`, `-`, `@`, tab or carriage return get a leading apostrophe.
 - **JSON** is an object with `tool`, `tool_version`, `schema_version`, `rules_as_of`, `generated_at`,
   `complete`, `rules` (each with statement, source URL and review date) and `results`.
-- **HTML** is one self-contained, script-free page with a restrictive
+- **HTML** (a table with label, assessment, notification, remediation, retained tokens, evidence source and next steps) is one self-contained, script-free page with a restrictive
   Content-Security-Policy, escaped values, light/dark themes and print styles.
   [docs/example-report.html](example-report.html) is rendered from synthetic data.
 
@@ -118,6 +118,10 @@ supplied after trimming, `docker_hub_pat_status`, `docker_hub_pat_evidence_statu
 `docker_hub_pat_sources`, `docker_hub_pat_notes`, `docker_hub_pat_recommendation`
 and `checked_at`.
 
+## Source verification
+
+The vendor post is the primary source and wins any disagreement. On 2026-10-24 the CVE record ([CVE.org record](https://cveawg.mitre.org/api/cve/CVE-2026-105445)) and the [NVD entry](https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2026-105445) were also checked. Both give the affected window as 2024-08-26T20:33:00Z up to (`lessThan`) 2026-09-30T19:10:00Z, matching the vendor post, with the vendor as the assigner. NVD shows the entry as awaiting analysis. The researchers' write-up at <https://ghostpat.com/> repeats the vendor's 2026-10-02 notification and 2026-10-08 deactivation dates. No disagreement was found. The vendor describes the fix time as approximate and labels the notification time "EST" in October; only dates are used.
+
 ## Rules and sources
 
 All rules come from <https://www.docker.com/blog/docker-hub-security-advisory-cve-2026-105445/>,
@@ -127,6 +131,9 @@ absence of a version rule. The post does not describe an audit-log review proced
 so none is encoded; it says the vendor now records token ownership changes.
 
 ## Handling reports
+
+A report written with `--output` is created with owner-only permissions (mode 0600 on POSIX systems, through a temporary file). Report data printed to stdout, and files on Windows, follow ordinary platform defaults.
+
 
 Reports contain whatever labels and dates you supply and can be sensitive.
 Use pseudonymous labels, keep inputs and reports outside version control, and

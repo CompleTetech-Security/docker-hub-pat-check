@@ -31,13 +31,15 @@ MAX_FIELD = 512
 RULES_DATE = "2026-10-24"
 CVES = ("CVE-2026-105445",)
 SOURCE = "https://www.docker.com/blog/docker-hub-security-advisory-cve-2026-105445/"
-SOURCES = (SOURCE,)
+CVE_RECORD = "https://cveawg.mitre.org/api/cve/CVE-2026-105445"
+NVD_RECORD = "https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2026-105445"
+SOURCES = (SOURCE, CVE_RECORD, NVD_RECORD)
 
 # Vendor timeline (UTC). Dates come from the vendor post; the post gives US Eastern
 # times, converted here to UTC. The remediation time is the vendor's approximation.
 EXPOSURE_START = "2024-08-26T20:33:00Z"
 VENDOR_FIX_AT = "2026-09-30T19:10:00Z"
-FIX_DAY = date(2026, 9, 30)
+EXPOSURE_DAY = date(2024, 8, 26)
 NOTIFICATION_DAY = date(2026, 10, 2)
 DEACTIVATION_DAY = date(2026, 10, 8)
 
@@ -167,7 +169,9 @@ def assess_pat_evidence(
         r_day = parse_day(rd)
         if r_day is None:
             return bad("Remediation date must be a real YYYY-MM-DD date.")
-    for day, minimum, name in ((n_day, NOTIFICATION_DAY, "notification"), (r_day, FIX_DAY, "remediation")):
+    # Source-backed bounds only: Docker's notice date, and the start of the exposure window.
+    # Docker's service-fix date (2026-09-30) is not an earliest date for an operator's own revocation.
+    for day, minimum, name in ((n_day, NOTIFICATION_DAY, "notification"), (r_day, EXPOSURE_DAY, "remediation")):
         if day is not None and (day < minimum or day > today):
             result["evidence_status"] = "date_outside_vendor_timeline"
             notes.append(
@@ -231,7 +235,7 @@ def assess_pat_evidence(
     else:
         result["evidence_status"] = "remediation_unknown"
         notes.append("Remediation of the listed tokens was not reported.")
-    result["recommendation"] = "Find the tokens listed in the vendor notification (by description and creation date) and revoke or rotate those you do not need. " + VENDOR_GUIDANCE
+    result["recommendation"] = "Find every token listed in the vendor notification (by description and creation date) and revoke or rotate each one: the vendor says conversion moved the owner record without rotating or revoking the secret, so a listed token should not be assumed safe. " + VENDOR_GUIDANCE
     return result
 
 
@@ -298,6 +302,8 @@ def load_inventory(path: Path, today=None, budget=MAX_RECORDS) -> list[Result]:
         data = json.loads(text, object_pairs_hook=_no_duplicates, parse_constant=_reject_constant)
     except (json.JSONDecodeError, RecursionError) as exc:
         raise InputError("Inventory is not valid JSON") from exc
+    except InputError:
+        raise
     except ValueError as exc:
         raise InputError("Inventory contains an unsupported value") from exc
     records = data if isinstance(data, list) else [data]
@@ -381,7 +387,7 @@ REPORT_CSS = """
 @media (prefers-color-scheme:dark){:root{--bg:#0F172A;--surface:#1E293B;--surface-2:#273449;--ink:#F1F5F9;--ink-2:#CBD5E1;--ink-3:#94A3B8;
 --line:#334155;--accent-text:#93C5FD;--bad:#FDA29B;--bad-bg:#55160C;--ok:#75E0A7;--ok-bg:#053321;--unk:#D0D5DD;--unk-bg:#344054}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Arial,system-ui,sans-serif}
-main{max-width:1080px;margin:0 auto;padding:24px 16px 48px}
+main{max-width:1180px;margin:0 auto;padding:24px 16px 48px}
 header{padding:20px 0;border-bottom:3px solid var(--accent);margin-bottom:20px}
 .eyebrow{font-size:12px;letter-spacing:.12em;font-weight:700;color:var(--accent-text);text-transform:uppercase}
 h1{margin:2px 0;font-size:26px}.sub{color:var(--ink-3);margin:0}h2{margin:32px 0 10px;font-size:18px;color:var(--ink-2)}
@@ -392,7 +398,8 @@ h1{margin:2px 0;font-size:26px}.sub{color:var(--ink-3);margin:0}h2{margin:32px 0
 .wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line)}
 th{background:var(--accent);color:var(--on-accent);text-align:left;padding:8px 10px;font-size:13px;white-space:nowrap}
 td{padding:8px 10px;border-top:1px solid var(--line);vertical-align:top;font-size:14px}tr:nth-child(even) td{background:var(--surface-2)}
-td.notes{color:var(--ink-3);font-size:13px;min-width:240px}
+td.notes{color:var(--ink-3);font-size:13px;min-width:200px}
+td{overflow-wrap:break-word}
 code{font:13px Consolas,monospace}
 .pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
 .pill.potentially_affected{color:var(--bad);background:var(--bad-bg)}.pill.fixed_version_reported{color:var(--ok);background:var(--ok-bg)}
@@ -430,6 +437,7 @@ def render_html(rows, *, brand="CompleteTech LLC", generated_at=None, complete=T
             f"<td>{esc(row.get('notification') or '—')}<br><code>{esc(row.get('notification_date') or '—')}</code></td>"
             f"<td>{esc(row.get('remediation') or '—')}<br><code>{esc(row.get('remediation_date') or '—')}</code></td>"
             f"<td>{esc(row.get('retained_listed_tokens') or '—')}</td>"
+            f"<td>{esc(row.get('evidence_source') or '—')}</td>"
             f"<td class='notes'><p>{esc(row.get(_field_name('recommendation')))}</p>"
             f"<details><summary>Evidence and limitations</summary><ul>{notes}</ul></details></td></tr>"
         )
@@ -448,8 +456,8 @@ Every result has exploitability <code>not_tested</code>. A claim of no notificat
 Reported remediation is not a guarantee.</p>
 {incomplete}<div class="tiles">{tile_html}</div>
 <h2>Results</h2><div class="wrap"><table><thead><tr><th>Label</th><th>Assessment</th><th>Notification</th>
-<th>Remediation</th><th>Listed tokens retained</th><th>Next step and evidence</th></tr></thead>
-<tbody>{''.join(body) or '<tr><td colspan="6">No completed results.</td></tr>'}</tbody></table></div>
+<th>Remediation</th><th>Listed tokens retained</th><th>Evidence source</th><th>Next step and evidence</th></tr></thead>
+<tbody>{''.join(body) or '<tr><td colspan="7">No completed results.</td></tr>'}</tbody></table></div>
 <h2>Vendor-reported rules</h2><div class="wrap"><table><thead><tr><th>Rule</th><th>Statement</th><th>Reviewed</th></tr></thead><tbody>{rules}</tbody></table></div>
 <footer>{esc(brand)} · docker-hub-pat-check {TOOL_VERSION} · {sources}</footer>
 </main></body></html>
