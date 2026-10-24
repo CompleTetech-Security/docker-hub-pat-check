@@ -49,9 +49,9 @@ UTF-8 with a header row naming only the fields above. See
 
 Files are limited to 4 MiB and 10,000 records; strings to 512 characters.
 Unsupported fields, duplicate JSON keys, non-finite numbers, wrong types,
-control characters, wrong column counts and invalid JSON or CSV are **operational
-errors** (exit 2). A value that resembles a Docker token (`dckr_` plus three
-letters and an underscore) is also an error, and the value is not echoed.
+control characters, wrong column counts, stray or unterminated CSV quotes, symlink loops and unreadable files, and invalid JSON or CSV are **operational
+errors** (exit 2). A value containing a Docker-prefixed token pattern (`dckr_` plus three
+letters and an underscore) is also an error, and the value is not echoed. Only that prefix is detected; other credential formats are not, so never supply any credential.
 The output path and `--brand` are validated before any input is read. Error messages never echo supplied text (field names, column names, paths, argument values); they describe the problem by position or count. Unrecognized enum values and invalid dates in an otherwise valid record are
 assessment results: `unknown` with `malformed_evidence`.
 
@@ -72,7 +72,7 @@ assessment results: `unknown` with `malformed_evidence`.
 | `remediation_unknown` | `potentially_affected` | Notice received; remediation missing or `unknown`. |
 | `remediation_incomplete` | `potentially_affected` | Remediation reported but the date is missing or retained tokens are not confirmed absent. |
 | `vendor_unnotified_claim` | `unknown` | `not_received`. Docker's claim that unnotified accounts were not exposed is recorded and attributed, not accepted as proof. |
-| `conflicting_evidence` | `unknown` | `not_received` combined with a notification date or reported remediation. |
+| `conflicting_evidence` | `unknown` | `not_received` combined with a notification date, remediation date, completed remediation or a retained-token answer; or `received` with a remediation date but no completed remediation (for example `not_done` plus a date). |
 | `evidence_incomplete` | `unknown` | Other evidence without a notification status. |
 | `evidence_absent` | `unknown` | No evidence. Absence is never clean. |
 | `malformed_evidence` | `unknown` | Unrecognized value or invalid date. |
@@ -81,13 +81,13 @@ assessment results: `unknown` with `malformed_evidence`.
 
 `exploitability` is always `not_tested`. `version_status` does not exist because
 there is no version rule. The tool compares dates against the vendor timeline
-using the machine's UTC date; rerunning an old copy does not update its rules.
+using the machine's UTC date, so a local date that is still tomorrow in UTC is rejected as in the future. A remediation date before 2026-09-30, the vendor's fix day, is treated as outside the vendor timeline and is `unknown`, even for operator-run revocation. Rerunning an old copy does not update its rules.
 
 ## Outputs
 
 `--format csv|json|html` (default `csv`), `--output FILE`, `--force`, `--brand NAME`.
 
-- **CSV** has one flat row per record, every field quoted, `\n` line endings, and the same fields as JSON including `schema_version`, rules date and sources. Lists are joined with ` | `. Values that
+- **CSV** has one flat row per record with a trailing `complete` column (`true` or `false`), every field quoted, `\n` line endings, and the same fields as JSON including `schema_version`, rules date and sources. Lists are joined with ` | `. Values that
   start with `=`, `+`, `-`, `@`, tab or carriage return get a leading apostrophe.
 - **JSON** is an object with `tool`, `tool_version`, `schema_version`, `rules_as_of`, `generated_at`,
   `complete`, `rules` (each with statement, source URL and review date) and `results`.
@@ -108,7 +108,7 @@ input file, even with `--force`, and its directory must already exist. With no
 | `0` | Completed. Findings do not change this unless `--fail-on-finding` is set. |
 | `1` | `--fail-on-finding` was set and at least one `potentially_affected` result exists. |
 | `2` | Argument, input or output error. Takes precedence over `1`. |
-| `130` | Interrupted while loading inputs. Records already loaded are written with `complete: false` (JSON) and the exit code is 130. An interrupt during the final write is not guaranteed to leave a report. |
+| `130` | Interrupted. Records already loaded are written marked incomplete (`complete: false` in JSON, `complete` column in CSV, a callout in HTML) and the exit code is 130. An interrupt during rendering or the final write triggers one further attempt to write the same results with `complete: false`; a second interrupt can still leave no report. |
 
 ## Result fields
 

@@ -12,7 +12,7 @@ collection to the specific product and advisory.
 
 - [x] Re-read the primary sources listed in [README.md](../README.md#primary-sources).
 - [x] Confirm `CVE-2026-105445` and its aliases refer to the same vulnerability.
-- [x] Preserve the exact affected ranges, supported branches, and fixed-build exceptions.
+- n/a Affected ranges, supported branches and fixed-build exceptions: there is no version rule. The exposure window and vendor timeline are encoded instead.
 - [x] Resolve source discrepancies explicitly or keep the disputed cases `unknown`.
 - [x] Record the source URL, retrieval/review date, evidence type, and relevant product for each rule.
 - [x] Treat platform conditions and configuration mitigations separately from patch state.
@@ -48,7 +48,7 @@ collection to the specific product and advisory.
 ## Vendor evidence gate
 
 - [x] Specify the vendor notification, support statement, account history, or authenticated export needed (`evidence_source`).
-- [x] Record who supplied the evidence and when, without recording credentials or personal account data.
+- [x] Record the kind of evidence source (`evidence_source`, a fixed list) and the notification and remediation dates the operator supplies, without credentials or personal account data. `checked_at` is the tool's run time, not when the evidence was supplied.
 - [x] Return `unknown` when authoritative evidence is unavailable; do not substitute a generic version comparison.
 - [x] Document cases where only the vendor can determine historical exposure.
 
@@ -69,7 +69,7 @@ collection to the specific product and advisory.
 - [x] Emit `exploitability: not_tested` for every future finding.
 - [x] Use `potentially_affected` only when evidence matches this advisory's documented range or condition.
 - [x] Use `fixed_version_reported` only for complete reported remediation evidence (no version comparison exists), without claiming verified remediation.
-- [x] Keep missing, malformed, conflicting, prerelease, vendor/custom-build, possible-backport, and uncovered-future cases `unknown`.
+- [x] Keep missing, malformed, conflicting, out-of-timeline and contradictory evidence `unknown`. Prerelease, custom-build, backport and uncovered-version cases are n/a: no version is compared.
 - [x] No `unsupported_runtime` status: there is no runtime lifecycle.
 - [x] Never convert absent source matches, hidden versions, authentication walls, or blocked requests into a clean result.
 - [x] Recommend only the vendor's own guidance; no version threshold exists.
@@ -80,7 +80,7 @@ collection to the specific product and advisory.
 - [x] Add a self-contained, script-free HTML report with escaped values and synthetic examples when useful.
 - [x] Protect CSV consumers from formula injection and keep private paths/data out of shared examples.
 - [x] Provide actual CLI help, input examples, exit-status semantics, and output-overwrite behavior.
-- [x] Findings (exit 1) are distinct from operational errors (exit 2). An interrupt while inputs load writes the already-loaded records with `complete: false` and exits 130 (tested with an injected `KeyboardInterrupt`). An interrupt during the final write is not guaranteed to leave a report; the write itself is atomic.
+- [x] Findings (exit 1) are distinct from operational errors (exit 2). An interrupt while inputs load writes the already-loaded records with `complete: false` and exits 130 (tested with an injected `KeyboardInterrupt`). An interrupt during rendering or writing triggers one further write attempt with `complete: false` (tested); the write itself is atomic.
 - [x] `--brand` names the organization in the HTML report. No logo option is provided.
 
 ## 5. Gate any optional network mode
@@ -92,7 +92,7 @@ collection to the specific product and advisory.
 ## 6. Verify behavior and release honestly
 
 - [x] Add focused synthetic tests for each relevant affected/fixed boundary and disputed case.
-- [x] Cover malformed inputs, absent evidence, custom builds, and collector/output safety where implemented.
+- [x] Cover malformed inputs, absent evidence, contradictory evidence and output safety. Custom builds and collectors are n/a.
 - [x] Use local mocks or loopback fixtures; do not scan public targets in tests.
 - [x] Avoid tests that merely assert documentation wording or mirror implementation details.
 - [x] Run documented commands against the actual executable; add CI only after meaningful tests exist.

@@ -191,9 +191,9 @@ def assess_pat_evidence(
         return result
 
     if n == "not_received":
-        if n_day is not None or r in REMEDIATION_DONE or r_day is not None:
+        if n_day is not None or r in REMEDIATION_DONE or r_day is not None or kept in ("yes", "no"):
             result["evidence_status"] = "conflicting_evidence"
-            notes.append("A notification date or reported remediation conflicts with a statement that no notification was received.")
+            notes.append("A notification date, remediation date, reported remediation or retained-token answer conflicts with a statement that no notification was received.")
             return result
         result["evidence_status"] = "vendor_unnotified_claim"
         notes.append(
@@ -203,6 +203,11 @@ def assess_pat_evidence(
         result["recommendation"] = (
             "Keep the vendor statement attributed to Docker. If doubt remains, ask Docker Support to confirm the account's status. " + VENDOR_GUIDANCE
         )
+        return result
+
+    if n == "received" and r not in REMEDIATION_DONE and r_day is not None:
+        result["evidence_status"] = "conflicting_evidence"
+        notes.append("A remediation date was supplied without a reported completed remediation. The evidence is contradictory and is not accepted.")
         return result
 
     # Notification received: the vendor's own notice indicates exposure, not abuse.
@@ -310,8 +315,36 @@ def load_inventory(path: Path, today=None, budget=MAX_RECORDS) -> list[Result]:
     return results
 
 
+def _check_quotes(text: str) -> None:
+    """Reject a quote inside an unquoted field or text after a closing quote."""
+    state = "start"  # start of field, unquoted, quoted, closed
+    i, n = 0, len(text)
+    while i < n:
+        c = text[i]
+        if state == "quoted":
+            if c == '"':
+                if text[i + 1:i + 2] == '"':
+                    i += 1
+                else:
+                    state = "closed"
+        elif c in ",\r\n":
+            state = "start"
+        elif c == '"':
+            if state != "start":
+                raise InputError("CSV has a stray quote character")
+            state = "quoted"
+        elif state == "closed":
+            raise InputError("CSV has text after a closing quote")
+        else:
+            state = "unquoted"
+        i += 1
+    if state == "quoted":
+        raise InputError("CSV has an unterminated quoted field")
+
+
 def load_csv(path: Path, today=None, budget=MAX_RECORDS) -> list[Result]:
     text = _read_bounded(path, "CSV file")
+    _check_quotes(text)
     try:
         reader = csv.DictReader(io.StringIO(text, newline=""), strict=True)
         header = reader.fieldnames or []
@@ -425,10 +458,10 @@ Reported remediation is not a guarantee.</p>
 
 def write_report(output, rows, *, format="csv", brand="CompleteTech LLC", complete=True):
     if format == "csv":
-        writer = csv.DictWriter(output, fieldnames=list(Result.__dataclass_fields__), lineterminator="\n", quoting=csv.QUOTE_ALL)
+        writer = csv.DictWriter(output, fieldnames=[*Result.__dataclass_fields__, "complete"], lineterminator="\n", quoting=csv.QUOTE_ALL)
         writer.writeheader()
         for row in rows:
-            writer.writerow({k: csv_safe(v) for k, v in row.items()})
+            writer.writerow({**{k: csv_safe(v) for k, v in row.items()}, "complete": "true" if complete else "false"})
     elif format == "json":
         json.dump({"tool": "docker-hub-pat-check", "tool_version": TOOL_VERSION, "schema_version": SCHEMA_VERSION, "rules_as_of": RULES_DATE,
                    "generated_at": datetime.now(timezone.utc).isoformat(), "complete": complete,
@@ -441,7 +474,9 @@ def write_report(output, rows, *, format="csv", brand="CompleteTech LLC", comple
 def save_report(path, rows, *, force=False, **options):
     """Publish a complete file atomically, refusing an existing path by default."""
     if path is None:
-        write_report(sys.stdout, rows, **options)
+        buffer = io.StringIO()
+        write_report(buffer, rows, **options)
+        sys.stdout.write(buffer.getvalue())
         return
     path = Path(path)
     temporary = None
@@ -523,13 +558,18 @@ def main(argv=None) -> int:
     except InputError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
-    except (OSError, UnicodeError, ValueError):
+    except (OSError, UnicodeError, ValueError, RuntimeError):
         print("error: an input or output file could not be read or checked", file=sys.stderr)
         return 2
     results = [asdict(r) for r in rows]
     try:
-        save_report(args.output, results, force=args.force, format=args.format, brand=args.brand, complete=complete)
-    except (OSError, ValueError):
+        try:
+            save_report(args.output, results, force=args.force, format=args.format, brand=args.brand, complete=complete)
+        except KeyboardInterrupt:
+            complete = False
+            print("Interrupted; writing completed results.", file=sys.stderr)
+            save_report(args.output, results, force=args.force, format=args.format, brand=args.brand, complete=False)
+    except (OSError, ValueError, RuntimeError):
         print("Cannot write report: the output file could not be written", file=sys.stderr)
         return 2
     if not complete:

@@ -3,6 +3,7 @@
 import csv
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -71,6 +72,19 @@ class AssessmentTests(unittest.TestCase):
                 outcome = assess(**case)
                 self.assertEqual("potentially_affected", outcome["status"])
                 self.assertEqual(name.split("_retained")[0], outcome["evidence_status"])
+
+    def test_contradictory_remediation_evidence_is_conflicting(self):
+        cases = [
+            dict(notification="received", remediation="not_done", remediation_date="2026-10-08"),
+            dict(notification="received", remediation="unknown", remediation_date="2026-10-08"),
+            dict(notification="received", remediation_date="2026-10-08"),
+            dict(notification="not_received", retained_listed_tokens="yes"),
+            dict(notification="not_received", retained_listed_tokens="no"),
+        ]
+        for case in cases:
+            with self.subTest(case=case):
+                outcome = assess(**case)
+                self.assertEqual(("unknown", "conflicting_evidence"), (outcome["status"], outcome["evidence_status"]))
 
     def test_received_without_date_is_still_potentially_affected(self):
         outcome = assess(notification="received", notification_date="")
@@ -267,6 +281,64 @@ class InputTests(unittest.TestCase):
         data = json.loads(out)
         self.assertFalse(data["complete"])
         self.assertEqual(1, len(data["results"]))
+
+    def test_symlink_loops_are_sanitized_operational_errors(self):
+        loop = self.root / "loop"
+        try:
+            os.symlink(loop, loop)
+        except (OSError, NotImplementedError):
+            self.skipTest("symlinks unavailable")
+        for argv in (("--inventory", loop), ("--evidence-csv", loop), ("--notification", "received", "--output", loop),
+                     ("--notification", "received", "--output", loop / "x")):
+            with self.subTest(argv=[a for a in argv if isinstance(a, str)]):
+                code, out, err = self.run_main(*argv)
+                self.assertEqual(2, code)
+                self.assertNotIn("Traceback", err)
+                self.assertNotIn("loop", err)
+
+    def test_csv_stray_quotes_and_trailing_text_are_errors(self):
+        for name, text in {"stray": 'label\r\nab"c\r\n', "after": 'label\r\n"abc"d\r\n', "open": 'label\r\n"abc'}.items():
+            with self.subTest(name=name):
+                self.assertEqual(2, self.run_main("--evidence-csv", self.write(name + ".csv", text))[0])
+        ok = self.write("ok.csv", 'label\r\n"a ""quoted"" label"\r\n')
+        self.assertEqual(0, self.run_main("--evidence-csv", ok)[0])
+
+    def test_csv_output_marks_incompleteness(self):
+        code, out, _ = self.run_main("--notification", "received")
+        self.assertEqual("true", next(csv.DictReader(io.StringIO(out)))["complete"])
+        original = tool.load_csv
+        tool.load_csv = lambda *a, **k: (_ for _ in ()).throw(KeyboardInterrupt)
+        try:
+            code, out, _ = self.run_main("--notification", "received", "--evidence-csv", self.write("c.csv", "label\r\na\r\n"))
+        finally:
+            tool.load_csv = original
+        self.assertEqual(130, code)
+        self.assertEqual("false", next(csv.DictReader(io.StringIO(out)))["complete"])
+
+    def test_interrupt_during_write_still_preserves_results(self):
+        target = self.root / "out.json"
+        original = tool.write_report
+        state = {"n": 0}
+
+        def flaky(*args, **kwargs):
+            state["n"] += 1
+            if state["n"] == 1:
+                raise KeyboardInterrupt
+            return original(*args, **kwargs)
+
+        tool.write_report = flaky
+        try:
+            code, _, _ = self.run_main("--notification", "received", "--format", "json", "--output", target)
+        finally:
+            tool.write_report = original
+        self.assertEqual(130, code)
+        self.assertFalse(json.loads(target.read_text(encoding="utf-8"))["complete"])
+        self.assertEqual([target.name], sorted(p.name for p in self.root.iterdir()))
+
+    def test_unencodable_text_is_an_operational_error(self):
+        code, out, err = self.run_main("--label", "bad\udcff", "--notification", "received", "--format", "json", "--output", self.root / "u.json")
+        self.assertEqual(2, code)
+        self.assertEqual([], list(self.root.iterdir()))
 
     def test_inventory_size_and_count_bounds(self):
         big = self.write("big.json", " " * (tool.MAX_INPUT + 1))

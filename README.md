@@ -65,7 +65,7 @@ Reviewed against the [vendor advisory](https://www.docker.com/blog/docker-hub-se
 | --- | --- |
 | Exposure start | 2024-08-26 20:33 UTC |
 | Fix deployed | 2026-09-30, about 19:10 UTC (vendor approximation) |
-| Notification emails | 2026-10-02 to users whose accounts received transferred PATs, and separately to their organization owners |
+| Notification emails | 2026-10-02 to users whose accounts received transferred PATs and to their organization owners |
 | Vendor deactivation of transferred PATs | 2026-10-08, except tokens whose owners asked to keep them |
 | Vendor guidance | Review PATs under Account settings, Personal access tokens; revoke any you do not recognize or no longer use; use organization access tokens for organization automation; contact Docker Support |
 
@@ -74,7 +74,7 @@ The vendor post is the only source. The notification and deactivation details ar
 ## What it does not do
 
 - It does not probe Docker Hub, call any API, test tokens, or have a network option.
-- It never accepts tokens. Any value that looks like a Docker token (`dckr_..._`) is rejected as an input error, without echoing it.
+- It never accepts tokens. Any value containing a Docker-prefixed token pattern (`dckr_` plus three letters and an underscore) is rejected as an input error, without echoing it. Tokens in other formats are not detected, so never paste any credential.
 - It is not a generic scanner and does not infer exposure from versions, banners or account metadata.
 - It does not store, log or upload anything. Reports contain only what you supplied. Keep real evidence and reports out of version control; the `reports/`, `private/` and `inventories/` paths are already ignored.
 
