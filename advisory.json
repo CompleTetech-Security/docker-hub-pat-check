@@ -10,29 +10,34 @@
   },
   "fixed": {
     "fixed_at": "2026-09-30T19:10:00Z",
-    "type": "Vendor service remediation; no local version threshold"
+    "type": "Vendor service remediation; no local version threshold",
+    "deactivation_at": "2026-10-08",
+    "notification_sent": "2026-10-02"
   },
   "preconditions": [
     "vendor identified account conversion exposure"
   ],
   "notes": [
     "No meaningful client or Docker version rule exists. Use administrator-supplied vendor notification and remediation evidence; do not infer exposure by probing Hub or testing tokens.",
-    "Vendor sent impacted-user/owner notifications on October 2 and says unnotified accounts were not exposed. This is a separate distinct exploit even though report discourages a standalone scanner."
+    "Vendor sent impacted-user and organization-owner notifications on October 2, 2026 and says accounts that received no email were not exposed. This is the vendor's claim, not verified here. Vendor deactivated identified transferred PATs on October 8, 2026, except tokens whose owners asked to keep them.",
+    "Source check 2026-10-24: the CVE record and NVD give 2024-08-26T20:33:00Z up to (lessThan) 2026-09-30T19:10:00Z, matching the vendor post; NVD status is Awaiting Analysis. No disagreement found; the vendor post wins any future conflict."
   ],
   "sources": [
-    "https://www.docker.com/blog/docker-hub-security-advisory-cve-2026-105445/"
+    "https://www.docker.com/blog/docker-hub-security-advisory-cve-2026-105445/",
+    "https://cveawg.mitre.org/api/cve/CVE-2026-105445",
+    "https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2026-105445"
   ],
   "implementation_status": "vendor_evidence_only",
   "verification": "verified_service_side_historical",
   "status": "new",
-  "verified_at": "2026-10-23",
+  "verified_at": "2026-10-24",
   "repository_url": "https://github.com/CompleteTech-LLC/docker-hub-pat-check",
   "schema_version": "1.0",
-  "record_type": "research_only",
-  "detection_enabled": false,
-  "implementation_complete": false,
+  "record_type": "vendor_evidence_rule",
+  "detection_enabled": true,
+  "implementation_complete": true,
   "assessment_performed": false,
   "exploitability": "not_tested",
   "scope_policy": "One distinct exploit per repository; aliases and affected products share this scope.",
-  "research_notice": "Source research for a planned checker; not an executable rule or assessment result."
+  "research_notice": "Offline vendor-evidence rule reviewed against the primary source on 2026-10-24. It records operator-supplied evidence; it is not a scan, a test or an exposure determination."
 }

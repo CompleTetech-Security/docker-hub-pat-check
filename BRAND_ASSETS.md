@@ -10,6 +10,6 @@ or ownership without written permission.
 
 This repository has no standalone logo file; the logo appears only inside the
 images in `docs/images/` (`banner.png` and `social-preview.png`). `report-light.png`
-and `report-dark.png` are illustrative placeholder layouts, not real reports. The
+and `report-dark.png` are screenshots of the HTML report rendered from the synthetic example evidence; they describe no real account. The
 repository also uses a text attribution linking to [complete.tech](https://complete.tech).
 Any future report branding must respect the rights of its owner.

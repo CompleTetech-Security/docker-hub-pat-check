@@ -1,0 +1,8 @@
+[
+  {"schema_version": 1, "label": "example-account-a", "notification": "received", "notification_date": "2026-10-02",
+   "remediation": "vendor_deactivated", "remediation_date": "2026-10-08", "retained_listed_tokens": "no", "evidence_source": "vendor_email"},
+  {"schema_version": 1, "label": "example-account-b", "notification": "received", "notification_date": "2026-10-02",
+   "remediation": "not_done", "evidence_source": "vendor_email"},
+  {"schema_version": 1, "label": "example-account-c", "notification": "not_received", "evidence_source": "operator_attestation"},
+  {"schema_version": 1, "label": "example-account-d"}
+]

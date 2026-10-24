@@ -1,0 +1,3 @@
+label,notification,notification_date,remediation,remediation_date,retained_listed_tokens,evidence_source
+example-account-a,received,2026-10-02,operator_revoked_or_rotated,2026-10-05,no,vendor_email
+example-account-b,not_received,,,,,operator_attestation
