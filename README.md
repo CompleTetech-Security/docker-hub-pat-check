@@ -96,6 +96,11 @@ Aliases and affected products share this scope. Different vulnerabilities belong
 
 ## Documentation
 
+Reports retain per-record UTC assessment time separately from UTC report-generation
+time. CSV appends `tool`, `tool_version` and `generated_at` after the existing
+columns, including zero-result summaries. A CLI run retains one generation time
+through interrupted rendering recovery; it is not an evidence-acquisition time.
+
 - [Reference](docs/REFERENCE.md) · [Implementation checklist](docs/IMPLEMENTATION.md) · [Advisory research record](advisory.json)
 - [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md) · [Licensing](LICENSING.md) · [Brand assets](BRAND_ASSETS.md)
 
