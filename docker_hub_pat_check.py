@@ -424,7 +424,7 @@ def render_html(rows, *, brand="CompleteTech LLC", generated_at=None, complete=T
     def esc(value):
         return html.escape("" if value is None else str(value), quote=True)
 
-    generated_at = generated_at or datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    generated_at = generated_at or datetime.now(timezone.utc).isoformat()
     key = _field_name("status")
     rows = sorted(rows, key=lambda row: STATUS_ORDER.get(row.get(key), 1))
     counts = {k: sum(row.get(key) == k for row in rows) for k in STATUS_ORDER}
@@ -441,7 +441,7 @@ def render_html(rows, *, brand="CompleteTech LLC", generated_at=None, complete=T
             f"<td>{esc(row.get('notification') or '—')}<br><code>{esc(row.get('notification_date') or '—')}</code></td>"
             f"<td>{esc(row.get('remediation') or '—')}<br><code>{esc(row.get('remediation_date') or '—')}</code></td>"
             f"<td>{esc(row.get('retained_listed_tokens') or '—')}</td>"
-            f"<td>{esc(row.get('evidence_source') or '—')}</td>"
+            f"<td>{esc(row.get('evidence_source') or '—')}<br><b>Assessment time (UTC)</b><br><code>{esc(row.get('checked_at') or 'unknown')}</code></td>"
             f"<td class='notes'><p>{esc(row.get(_field_name('recommendation')))}</p>"
             f"<details><summary>Evidence and limitations</summary><ul>{notes}</ul></details></td></tr>"
         )
@@ -454,7 +454,7 @@ def render_html(rows, *, brand="CompleteTech LLC", generated_at=None, complete=T
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
 <title>Docker Hub PAT Vendor-Evidence Report</title><style>{REPORT_CSS}</style></head><body><main>
 <header><div class="eyebrow">{esc(brand)}</div><h1>Docker Hub PAT Vendor-Evidence Report</h1>
-<p class="sub">CVE-2026-105445 · generated {esc(generated_at)} · rules as of {RULES_DATE}</p></header>
+<p class="sub">CVE-2026-105445 · Report generated {esc(generated_at)} · rules as of {RULES_DATE}</p></header>
 <p class="callout"><b>Operator-supplied vendor evidence, not a test.</b> Docker Hub was not contacted and no token was tested.
 Every result has exploitability <code>not_tested</code>. A claim of no notification is the vendor's claim, not proof, and stays unknown.
 Reported remediation is not a guarantee.</p>
@@ -468,23 +468,25 @@ Reported remediation is not a guarantee.</p>
 """
 
 
-def write_report(output, rows, *, format="csv", brand="CompleteTech LLC", complete=True):
+def write_report(output, rows, *, format="csv", brand="CompleteTech LLC", complete=True, generated_at=None):
+    generated_at = generated_at or datetime.now(timezone.utc).isoformat()
+    metadata = {"tool": "docker-hub-pat-check", "tool_version": TOOL_VERSION, "generated_at": generated_at}
     if format == "csv":
-        writer = csv.DictWriter(output, fieldnames=[*Result.__dataclass_fields__, "complete", "record_type"], lineterminator="\n", quoting=csv.QUOTE_ALL)
+        writer = csv.DictWriter(output, fieldnames=[*Result.__dataclass_fields__, "complete", "record_type", *metadata], lineterminator="\n", quoting=csv.QUOTE_ALL)
         writer.writeheader()
         for row in rows:
-            writer.writerow({**{k: csv_safe(v) for k, v in row.items()}, "record_type": "result", "complete": "true" if complete else "false"})
+            writer.writerow({**{k: csv_safe(v) for k, v in {**row, **metadata}.items()}, "record_type": "result", "complete": "true" if complete else "false"})
         if not rows:
-            writer.writerow({"record_type": "summary", "complete": "true" if complete else "false",
+            writer.writerow({**{k: csv_safe(v) for k, v in metadata.items()}, "record_type": "summary", "complete": "true" if complete else "false",
                              "schema_version": SCHEMA_VERSION, "docker_hub_pat_cves": csv_safe(list(CVES)),
                              "docker_hub_pat_rules_as_of": RULES_DATE, "docker_hub_pat_exploitability": "not_tested"})
     elif format == "json":
         json.dump({"tool": "docker-hub-pat-check", "tool_version": TOOL_VERSION, "schema_version": SCHEMA_VERSION, "rules_as_of": RULES_DATE,
-                   "generated_at": datetime.now(timezone.utc).isoformat(), "complete": complete,
+                   "generated_at": generated_at, "complete": complete,
                    "rules": list(RULES), "results": rows}, output, ensure_ascii=False, indent=2)
         output.write("\n")
     else:
-        output.write(render_html(rows, brand=brand, complete=complete))
+        output.write(render_html(rows, brand=brand, generated_at=generated_at, complete=complete))
 
 
 def save_report(path, rows, *, force=False, state=None, **options):
@@ -574,6 +576,7 @@ def main(argv=None) -> int:
            "retained_listed_tokens": args.retained_listed_tokens, "evidence_source": args.evidence_source}
     rows = []
     complete = True
+    generated_at = datetime.now(timezone.utc).isoformat()
     try:
         _reject_text(args.brand, "--brand")
         # Validate the output path before loading any input.
@@ -609,7 +612,7 @@ def main(argv=None) -> int:
     state = {"published": False, "stdout_started": False, "publication_started": False}
     try:
         try:
-            save_report(args.output, results, force=args.force, format=args.format, brand=args.brand, complete=complete, state=state)
+            save_report(args.output, results, force=args.force, format=args.format, brand=args.brand, complete=complete, generated_at=generated_at, state=state)
         except KeyboardInterrupt:
             if state["published"]:
                 print("Interrupted after the report was published; not retrying.", file=sys.stderr)
@@ -622,7 +625,7 @@ def main(argv=None) -> int:
                 return 130
             complete = False
             print("Interrupted; writing completed results.", file=sys.stderr)
-            save_report(args.output, results, force=args.force, format=args.format, brand=args.brand, complete=False, state=state)
+            save_report(args.output, results, force=args.force, format=args.format, brand=args.brand, complete=False, generated_at=generated_at, state=state)
     except KeyboardInterrupt:
         return 130
     except (OSError, ValueError, RuntimeError, csv.Error):

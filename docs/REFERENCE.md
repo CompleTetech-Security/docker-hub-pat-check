@@ -85,6 +85,14 @@ using the machine's UTC date, so a local date that is still tomorrow in UTC is r
 
 ## Outputs
 
+Every format identifies `docker-hub-pat-check` and its tool version. CSV appends
+`tool`, `tool_version`, and UTC `generated_at` after all existing columns; both
+result rows and zero-result summaries carry those values. A CLI run shares one
+generation timestamp across normal rendering and interrupted rendering recovery.
+HTML labels each existing `checked_at` as **Assessment time (UTC)**, separately
+from **Report generated**. Neither time attests evidence acquisition or vendor
+remediation; summary rows do not invent per-record assessment times.
+
 `--format csv|json|html` (default `csv`), `--output FILE`, `--force`, `--brand NAME`.
 
 - **CSV** has one flat row per record with a `complete` column (`true` or `false`), every field quoted, `\n` line endings, and the same fields as JSON including `schema_version`, rules date and sources. Lists are joined with ` | `. Values that
