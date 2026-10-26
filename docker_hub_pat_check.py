@@ -608,10 +608,11 @@ def main(argv=None) -> int:
     except (OSError, UnicodeError, ValueError, RuntimeError):
         print("error: an input or output file could not be read or checked", file=sys.stderr)
         return 2
-    results = [asdict(r) for r in rows]
+    results = None
     state = {"published": False, "stdout_started": False, "publication_started": False}
     try:
         try:
+            results = [asdict(r) for r in rows]
             save_report(args.output, results, force=args.force, format=args.format, brand=args.brand, complete=complete, generated_at=generated_at, state=state)
         except KeyboardInterrupt:
             if state["published"]:
@@ -625,6 +626,8 @@ def main(argv=None) -> int:
                 return 130
             complete = False
             print("Interrupted; writing completed results.", file=sys.stderr)
+            if results is None:
+                results = [asdict(r) for r in rows]
             save_report(args.output, results, force=args.force, format=args.format, brand=args.brand, complete=False, generated_at=generated_at, state=state)
     except KeyboardInterrupt:
         return 130

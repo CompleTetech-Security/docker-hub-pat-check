@@ -93,6 +93,11 @@ HTML labels each existing `checked_at` as **Assessment time (UTC)**, separately
 from **Report generated**. Neither time attests evidence acquisition or vendor
 remediation; summary rows do not invent per-record assessment times.
 
+If conversion of completed assessments into report records is interrupted, the
+original assessments are retained for one incomplete-report recovery attempt.
+A second interruption stops recovery without starting publication. Existing
+output protection and the single-publication guard still apply.
+
 `--format csv|json|html` (default `csv`), `--output FILE`, `--force`, `--brand NAME`.
 
 - **CSV** has one flat row per record with a `complete` column (`true` or `false`), every field quoted, `\n` line endings, and the same fields as JSON including `schema_version`, rules date and sources. Lists are joined with ` | `. Values that
