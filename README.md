@@ -3,6 +3,13 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/CompleTetech-Security/docker-hub-pat-check/actions"><img src="https://img.shields.io/github/actions/workflow/status/CompleTetech-Security/docker-hub-pat-check/tests.yml?label=tests" alt="Tests"></a>
+  <img src="https://img.shields.io/badge/python-3.10%2B-1E3A8A" alt="Python 3.10+">
+  <img src="https://img.shields.io/badge/dependencies-none-067647" alt="No runtime dependencies">
+  <a href="LICENSING.md"><img src="https://img.shields.io/badge/license-AGPL--3.0%20%7C%20commercial-64748B" alt="AGPL-3.0 or commercial license"></a>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/status-implemented-067647" alt="Status: implemented">
   <img src="https://img.shields.io/badge/checker-vendor%20evidence%20only-1E3A8A" alt="Vendor-evidence-only checker">
   <a href="LICENSING.md"><img src="https://img.shields.io/badge/license-AGPL--3.0%20%7C%20commercial-64748B" alt="AGPL-3.0 or commercial license"></a>
